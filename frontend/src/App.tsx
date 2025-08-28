@@ -1,34 +1,92 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import "./App.css"
 
-function App() {
-  const [count, setCount] = useState(0)
+type Note = {
+  id: number;
+  title: string;
+  content: string;
+}
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+
+const App = () => { 
+  const [notes, setNotes] = useState<Note[]>([
+    {
+      id: 1,
+      title: "note title 1",
+      content: "content 1",
+    },
+    {
+      id: 2,
+      title: "note title 2",
+      content: "content 2",
+    },
+    {
+      id: 3,
+      title: "note title 3",
+      content: "content 3",
+    },
+    {
+      id: 4,
+      title: "note title 4",
+      content: "content 4",
+    }
+  ]);
+
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    console.log("title: ", title)
+    console.log("content: ", content)
+
+    const newNote: Note = {
+      id: notes.length + 1,
+      title: title,
+      content: content
+    }
+
+    setNotes([newNote, ...notes]);
+    setTitle("");
+    setContent("");
+  };
+
+  return(
+    <div className="app-container">
+      <form 
+        className="note-form" 
+        onSubmit={(event) => handleSubmit(event)}
+      >
+        <input 
+          value={title}
+          onChange={(event)=>
+            setTitle(event.target.value)
+          }
+          placeholder="title" 
+          required/>
+        <textarea 
+          value={content}
+          onChange={(event) => 
+            setContent(event.target.value)
+
+          }
+          placeholder="Content" 
+          rows={10} 
+          required></textarea>
+        <button type="submit">Add note</button>
+      </form>
+      <div className="notes-grid">
+        {notes.map((note)=> ( 
+          <div className="note-item">
+            <div className="notes-header">
+              <button>x</button>
+            </div>
+            <h2>{note.title}</h2>
+            <p>{note.content}</p>
+          </div>
+        ))}
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
