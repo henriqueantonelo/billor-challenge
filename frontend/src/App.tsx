@@ -15,11 +15,12 @@ const App = () => {
     const fetchNotes = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('http://localhost:3000/notes');
+        const response = await fetch('http://localhost:3000/notes?projectId=1');
+        if (!response.ok) throw new Error('Failed to load notes');
         const notes: Note[] = await response.json();
         setNotes(notes);
       } catch (e) {
-        setError('Failed to load notes');
+        setError('Failed to load notes. Please try again.');
       } finally {
         setIsLoading(false);
       }
@@ -35,36 +36,43 @@ const App = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleAddNote = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!validateForm()) return;
+const handleAddNote = async (event: React.FormEvent) => {
+  event.preventDefault();
+  if (!validateForm()) return;
 
-    setIsLoading(true);
-    setError(null);
-    const optimisticNote = { id: Date.now(), title, content, projectId: 1 }; 
-    setNotes([optimisticNote, ...notes]);
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      const response = await fetch('http://localhost:3000/notes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': Date.now().toString(),
-        },
-        body: JSON.stringify({ title, content, projectId: 1 }),
-      });
-      if (!response.ok) throw new Error('Failed to create note');
-      const newNote = await response.json();
-      setNotes(notes.map(n => n.id === optimisticNote.id ? newNote : n));
-      setTitle('');
-      setContent('');
-    } catch (e) {
-      setNotes(notes.filter(n => n.id !== optimisticNote.id));
-      setError('Failed to add note. Retry?');
-    } finally {
-      setIsLoading(false);
+  const optimisticNote = { id: Date.now(), title, content, projectId: 1 };
+  setNotes([optimisticNote, ...notes]);
+
+  try {
+    const response = await fetch('http://localhost:3000/notes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({ title, content, projectId: 1 }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to create note');
     }
-  };
+
+    const newNote: Note = await response.json();
+    setNotes(notes.map(n => n.id === optimisticNote.id ? newNote : n));
+
+    setTitle('');
+    setContent('');
+  } catch (e: any) {
+    setNotes(notes.filter(n => n.id !== optimisticNote.id));
+    setError(e.message || 'Failed to add note. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleUpdateNote = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,15 +89,18 @@ const App = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, content, projectId: 1 }),
       });
-      if (!response.ok) throw new Error('Failed to update note');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update note');
+      }
       const newNote = await response.json();
       setNotes(notes.map(n => n.id === selectedNote.id ? newNote : n));
       setTitle('');
       setContent('');
       setSelectedNote(null);
-    } catch (e) {
-      setNotes(notes.filter(n => n.id !== selectedNote.id));
-      setError('Failed to update note. Retry?');
+    } catch (e: any) {
+      setNotes(notes); // Rollback
+      setError(e.message || 'Failed to update note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -112,9 +123,12 @@ const App = () => {
       const response = await fetch(`http://localhost:3000/notes/${noteId}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete note');
-    } catch (e) {
-      setError('Failed to delete note. Retry?');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete note');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete note. Please try again.');
       setNotes(notes); // Rollback
     } finally {
       setIsLoading(false);
@@ -123,79 +137,84 @@ const App = () => {
 
   return (
     <div className="app-container">
-      <form
-        className="note-form"
-        onSubmit={selectedNote ? handleUpdateNote : handleAddNote}
-      >
-        <label htmlFor="title">Title</label>
-        <input
-          id="title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Title"
-          aria-invalid={!!formErrors.title}
-          disabled={isLoading}
-        />
-        {formErrors.title && <span className="error">{formErrors.title}</span>}
-        <label htmlFor="content">Content</label>
-        <textarea
-          id="content"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Content"
-          rows={10}
-          aria-invalid={!!formErrors.content}
-          disabled={isLoading}
-        />
-        {formErrors.content && <span className="error">{formErrors.content}</span>}
-        {error && (
-          <div className="error" role="alert" aria-live="polite">
-            {error}
-            <button onClick={() => setError(null)}>Retry</button>
-          </div>
-        )}
-        {selectedNote ? (
-          <div className="edit-buttons">
-            <button type="submit" disabled={isLoading}>
-              {isLoading ? 'Saving...' : 'Save'}
-            </button>
-            <button onClick={handleCancel} disabled={isLoading}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Adding...' : 'Add Note'}
-          </button>
-        )}
-      </form>
-      <div className="notes-grid">
-        {isLoading ? (
-          <div className="skeleton">Loading...</div>
-        ) : (
-          notes.map(note => (
-            <div
-              key={note.id}
-              className="note-item"
-              onClick={() => setSelectedNote(note)}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="notes-header">
-                <button
-                  onClick={e => deleteNote(e, note.id)}
-                  aria-label="Delete note"
-                  disabled={isLoading}
-                >
-                  x
-                </button>
-              </div>
-              <h2>{note.title}</h2>
-              <p>{note.content}</p>
+      <main className="main-content">
+        <form
+          className="note-form"
+          onSubmit={selectedNote ? handleUpdateNote : handleAddNote}
+        >
+          <label htmlFor="title">Title</label>
+          <input
+            id="title"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Title"
+            aria-invalid={!!formErrors.title}
+            disabled={isLoading}
+          />
+          {formErrors.title && <span className="error">{formErrors.title}</span>}
+          <label htmlFor="content">Content</label>
+          <textarea
+            id="content"
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder="Content"
+            rows={10}
+            aria-invalid={!!formErrors.content}
+            disabled={isLoading}
+          />
+          {formErrors.content && <span className="error">{formErrors.content}</span>}
+          {error && (
+            <div className="error" role="alert" aria-live="polite">
+              {error}
+              <button onClick={() => setError(null)} disabled={isLoading}>Retry</button>
             </div>
-          ))
-        )}
-      </div>
+          )}
+          {selectedNote ? (
+            <div className="edit-buttons">
+              <button type="submit" disabled={isLoading || !!formErrors.title || !!formErrors.content}>
+                {isLoading ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={handleCancel} disabled={isLoading}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button type="submit" disabled={isLoading || !!formErrors.title || !!formErrors.content}>
+              {isLoading ? 'Adding...' : 'Add Note'}
+            </button>
+          )}
+        </form>
+        <div className="notes-grid">
+          {isLoading ? (
+            <div className="skeleton">Loading...</div>
+          ) : notes.length === 0 ? (
+            <p>No notes available.</p>
+          ) : (
+            notes.map(note => (
+              <div
+                key={note.id}
+                className="note-item"
+                onClick={() => setSelectedNote(note)}
+                onKeyPress={e => e.key === 'Enter' && setSelectedNote(note)}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="notes-header">
+                  <button
+                    onClick={e => deleteNote(e, note.id)}
+                    aria-label={`Delete note ${note.title}`}
+                    disabled={isLoading}
+                  >
+                    x
+                  </button>
+                </div>
+                <h2>{note.title}</h2>
+                <p>{note.content}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </main>
     </div>
   );
 };
