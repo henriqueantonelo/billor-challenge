@@ -4,3 +4,8 @@ export interface Note {
   content: string;
   projectId: number;
 }
+
+export interface Project {
+  id: number;
+  name: string;
+}
