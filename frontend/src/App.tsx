@@ -21,7 +21,10 @@ const App = () => {
   const [error, setError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<{ title?: string; content?: string }>({});
 
+<<<<<<< HEAD
   // Fetch all projects
+=======
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
   useEffect(() => {
     const fetchProjects = async () => {
       setIsLoading(true);
@@ -40,7 +43,10 @@ const App = () => {
     fetchProjects();
   }, []);
 
+<<<<<<< HEAD
   // Fetch notes whenever selected project changes
+=======
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
   useEffect(() => {
     if (!selectedProject) return;
 
@@ -161,7 +167,11 @@ const App = () => {
       setContent('');
       setMode('view');
     } catch (e: any) {
+<<<<<<< HEAD
       setNotes(notes); // Rollback
+=======
+      setNotes(notes); 
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
       setError(e.message || 'Failed to update note. Please try again.');
     } finally {
       setIsLoading(false);
@@ -185,7 +195,11 @@ const deleteNote = async (noteId: number) => {
   setIsLoading(true);
   setError(null);
 
+<<<<<<< HEAD
   const previousNotes = [...notes]; // salva o estado atual
+=======
+  const previousNotes = [...notes]; 
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
   setNotes(notes.filter(n => n.id !== noteId));
 
   try {
@@ -201,7 +215,11 @@ const deleteNote = async (noteId: number) => {
     setIsNoteModalOpen(false);
   } catch (e: any) {
     setError(e.message || 'Failed to delete note. Please try again.');
+<<<<<<< HEAD
     setNotes(previousNotes); // rollback correto
+=======
+    setNotes(previousNotes); 
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
   } finally {
     setIsLoading(false);
   }
@@ -298,7 +316,11 @@ const deleteNote = async (noteId: number) => {
     <div className="app-container">
       <aside className="projects-sidebar">
         <h2>Projects</h2>
+<<<<<<< HEAD
         <button onClick={() => setIsNewProjectModalOpen(true)}>New Project</button>
+=======
+        <button className='btn-newProject' onClick={() => setIsNewProjectModalOpen(true)}>New Project</button>
+>>>>>>> aa15999b46119508d277ca3bf4de96c8c5750674
         <ul>
           {projects.map(project => (
             <li
