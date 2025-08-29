@@ -1,93 +1,203 @@
-import { useState } from "react";
-import "./App.css"
+import { useEffect, useState } from 'react';
+import './App.css';
+import type { Note } from './types';
 
-type Note = {
-  id: number;
-  title: string;
-  content: string;
-}
+const App = () => {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<{ title?: string; content?: string }>({});
 
+  useEffect(() => {
+    const fetchNotes = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch('http://localhost:3000/notes');
+        const notes: Note[] = await response.json();
+        setNotes(notes);
+      } catch (e) {
+        setError('Failed to load notes');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchNotes();
+  }, []);
 
-const App = () => { 
-  const [notes, setNotes] = useState<Note[]>([
-    {
-      id: 1,
-      title: "note title 1",
-      content: "content 1",
-    },
-    {
-      id: 2,
-      title: "note title 2",
-      content: "content 2",
-    },
-    {
-      id: 3,
-      title: "note title 3",
-      content: "content 3",
-    },
-    {
-      id: 4,
-      title: "note title 4",
-      content: "content 4",
-    }
-  ]);
-
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    console.log("title: ", title)
-    console.log("content: ", content)
-
-    const newNote: Note = {
-      id: notes.length + 1,
-      title: title,
-      content: content
-    }
-
-    setNotes([newNote, ...notes]);
-    setTitle("");
-    setContent("");
+  const validateForm = () => {
+    const errors: { title?: string; content?: string } = {};
+    if (!title.trim()) errors.title = 'Title is required';
+    if (!content.trim()) errors.content = 'Content is required';
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  return(
-    <div className="app-container">
-      <form 
-        className="note-form" 
-        onSubmit={(event) => handleSubmit(event)}
-      >
-        <input 
-          value={title}
-          onChange={(event)=>
-            setTitle(event.target.value)
-          }
-          placeholder="title" 
-          required/>
-        <textarea 
-          value={content}
-          onChange={(event) => 
-            setContent(event.target.value)
+  const handleAddNote = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!validateForm()) return;
 
-          }
-          placeholder="Content" 
-          rows={10} 
-          required></textarea>
-        <button type="submit">Add note</button>
+    setIsLoading(true);
+    setError(null);
+    const optimisticNote = { id: Date.now(), title, content, projectId: 1 }; 
+    setNotes([optimisticNote, ...notes]);
+
+    try {
+      const response = await fetch('http://localhost:3000/notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': Date.now().toString(),
+        },
+        body: JSON.stringify({ title, content, projectId: 1 }),
+      });
+      if (!response.ok) throw new Error('Failed to create note');
+      const newNote = await response.json();
+      setNotes(notes.map(n => n.id === optimisticNote.id ? newNote : n));
+      setTitle('');
+      setContent('');
+    } catch (e) {
+      setNotes(notes.filter(n => n.id !== optimisticNote.id));
+      setError('Failed to add note. Retry?');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateNote = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedNote || !validateForm()) return;
+
+    setIsLoading(true);
+    setError(null);
+    const updatedNote = { ...selectedNote, title, content };
+    setNotes(notes.map(n => n.id === selectedNote.id ? updatedNote : n));
+
+    try {
+      const response = await fetch(`http://localhost:3000/notes/${selectedNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, projectId: 1 }),
+      });
+      if (!response.ok) throw new Error('Failed to update note');
+      const newNote = await response.json();
+      setNotes(notes.map(n => n.id === selectedNote.id ? newNote : n));
+      setTitle('');
+      setContent('');
+      setSelectedNote(null);
+    } catch (e) {
+      setNotes(notes.filter(n => n.id !== selectedNote.id));
+      setError('Failed to update note. Retry?');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setTitle('');
+    setContent('');
+    setSelectedNote(null);
+    setFormErrors({});
+  };
+
+  const deleteNote = async (event: React.MouseEvent, noteId: number) => {
+    event.stopPropagation();
+    setIsLoading(true);
+    setError(null);
+    setNotes(notes.filter(n => n.id !== noteId));
+
+    try {
+      const response = await fetch(`http://localhost:3000/notes/${noteId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete note');
+    } catch (e) {
+      setError('Failed to delete note. Retry?');
+      setNotes(notes); // Rollback
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="app-container">
+      <form
+        className="note-form"
+        onSubmit={selectedNote ? handleUpdateNote : handleAddNote}
+      >
+        <label htmlFor="title">Title</label>
+        <input
+          id="title"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Title"
+          aria-invalid={!!formErrors.title}
+          disabled={isLoading}
+        />
+        {formErrors.title && <span className="error">{formErrors.title}</span>}
+        <label htmlFor="content">Content</label>
+        <textarea
+          id="content"
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          placeholder="Content"
+          rows={10}
+          aria-invalid={!!formErrors.content}
+          disabled={isLoading}
+        />
+        {formErrors.content && <span className="error">{formErrors.content}</span>}
+        {error && (
+          <div className="error" role="alert" aria-live="polite">
+            {error}
+            <button onClick={() => setError(null)}>Retry</button>
+          </div>
+        )}
+        {selectedNote ? (
+          <div className="edit-buttons">
+            <button type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={handleCancel} disabled={isLoading}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? 'Adding...' : 'Add Note'}
+          </button>
+        )}
       </form>
       <div className="notes-grid">
-        {notes.map((note)=> ( 
-          <div className="note-item">
-            <div className="notes-header">
-              <button>x</button>
+        {isLoading ? (
+          <div className="skeleton">Loading...</div>
+        ) : (
+          notes.map(note => (
+            <div
+              key={note.id}
+              className="note-item"
+              onClick={() => setSelectedNote(note)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="notes-header">
+                <button
+                  onClick={e => deleteNote(e, note.id)}
+                  aria-label="Delete note"
+                  disabled={isLoading}
+                >
+                  x
+                </button>
+              </div>
+              <h2>{note.title}</h2>
+              <p>{note.content}</p>
             </div>
-            <h2>{note.title}</h2>
-            <p>{note.content}</p>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;
