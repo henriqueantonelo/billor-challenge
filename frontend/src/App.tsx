@@ -44,7 +44,7 @@ const handleAddNote = async (event: React.FormEvent) => {
   setError(null);
 
   const optimisticNote = { id: Date.now(), title, content, projectId: 1 };
-  setNotes([optimisticNote, ...notes]);
+  setNotes(prev => [optimisticNote, ...prev]);
 
   try {
     const response = await fetch('http://localhost:3000/notes', {
@@ -62,12 +62,12 @@ const handleAddNote = async (event: React.FormEvent) => {
     }
 
     const newNote: Note = await response.json();
-    setNotes(notes.map(n => n.id === optimisticNote.id ? newNote : n));
+    setNotes(prev => prev.map(n => n.id === optimisticNote.id ? newNote : n));
 
     setTitle('');
     setContent('');
   } catch (e: any) {
-    setNotes(notes.filter(n => n.id !== optimisticNote.id));
+    setNotes(prev => prev.filter(n => n.id !== optimisticNote.id));
     setError(e.message || 'Failed to add note. Please try again.');
   } finally {
     setIsLoading(false);
